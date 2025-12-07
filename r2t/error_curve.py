@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from .q3 import baseline_sum, join_rows
 from .r2t_lp import r2t_estimate, tau_grid_from_contribs
+from .baselines import naive_laplace_sum, smooth_like_laplace_sum, local_sensitivity_bound
 
 def main():
     p = argparse.ArgumentParser()
@@ -27,20 +28,34 @@ def main():
     base = baseline_sum(args.mktsegment, args.cutoff)
 
     xs = [float(x) for x in args.epsilons.split(",")]
-    errs = []
+    errs_r2t = []
+    errs_naive = []
+    errs_smooth = []
     rng = np.random.default_rng(777)
+    tau_bound = max(tau_values) if len(tau_values) else 1.0
+    ls_bound = local_sensitivity_bound(contribs)
     for e in xs:
         dp_out, _ = r2t_estimate(contribs, e, tau_values, rng)
-        errs.append(abs(dp_out - base) / max(base, 1e-9))
+        naive = naive_laplace_sum(base, e, tau_bound, rng)
+        smooth = smooth_like_laplace_sum(base, e, contribs, rng)
+        errs_r2t.append(abs(dp_out - base) / max(base, 1e-9))
+        errs_naive.append(abs(naive - base) / max(base, 1e-9))
+        errs_smooth.append(abs(smooth - base) / max(base, 1e-9))
 
-    plt.figure()
-    plt.plot(xs, errs, marker="o")
+    plt.style.use("seaborn-v0_8")
+    plt.figure(figsize=(7, 4))
+    plt.plot(xs, errs_r2t, marker="o", label="R2T-LP")
+    plt.plot(xs, errs_naive, marker="s", label="Naive Laplace")
+    plt.plot(xs, errs_smooth, marker="^", label="Smooth-like")
     plt.xlabel("epsilon")
     plt.ylabel("relative error")
-    plt.grid(True)
+    plt.grid(True, linestyle=":")
+    plt.legend()
     Path("report").mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
     plt.savefig("report/error_epsilon.png", dpi=200)
-    print("saved report/error_epsilon.png")
+    plt.savefig("report/error_epsilon.svg")
+    print("saved report/error_epsilon.png and .svg")
 
 if __name__ == "__main__":
     main()
